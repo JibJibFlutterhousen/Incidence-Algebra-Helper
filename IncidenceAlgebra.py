@@ -50,6 +50,12 @@ def _listlist_from_digraph(DiGraph):
         listlist[int(Edge.split(" ")[0])-1][int(Edge.split(" ")[1])-1] = 1
     return listlist
 
+def _relabel(DiGraph):
+    Mapping = dict()
+    for Node in DiGraph.nodes():
+        Mapping[Node] = Node+1
+    return nx.relabel_nodes(DiGraph, Mapping, True)
+
 def _display_result(Matrix):
     window = tkinter.Tk()
     window.title("Resulting Incidence Algebra")
@@ -66,6 +72,7 @@ def _display_result(Matrix):
         Matrixrows.append(Matrixcolumns)
     window.after(10, lambda: window.focus_force())
     window.bind('<Return>', lambda event:window.destroy())
+    window.iconbitmap("icon.ico")
     window.mainloop()
 
 def _calculate_matrix(Input):
@@ -79,7 +86,7 @@ def _calculate_matrix(Input):
             Temp.append(int(value))
         Matrix.append(Temp)
     print(Matrix)
-    DiGraph = nx.convert_node_labels_to_integers(_digraph_from_list_list(Matrix), 1)
+    DiGraph = _relabel(_digraph_from_list_list(Matrix))
     DiGraph = _reverse_transitivity_reduce(DiGraph)
     OutputStream = (_listlist_from_digraph(DiGraph))
     print(OutputStream)
@@ -108,6 +115,7 @@ def _make_window(MatrixSize):
         Matrixrows.append(Matrixcolumns)
     window.after(10, lambda: window.focus_force())
     window.bind('<Return>', lambda event: _calculate_matrix(Matrixrows))
+    window.iconbitmap("icon.ico")
     window.mainloop()
 
 top = tkinter.Tk()
@@ -119,4 +127,5 @@ MatrixDimentions = tkinter.Spinbox(top, from_=4, to=50, width=3)
 MatrixDimentions.grid(row=0,column=1)
 gobutton = tkinter.Button(top, text="Enter Matrix", command=lambda: _make_window(int(MatrixDimentions.get()))).grid(row=0,column=2)
 top.bind('<Return>',lambda event:_make_window(int(MatrixDimentions.get())))
+top.iconbitmap("icon.ico")
 top.mainloop()
