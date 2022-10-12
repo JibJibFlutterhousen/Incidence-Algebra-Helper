@@ -1,5 +1,6 @@
 # pyinstaller IncidenceAlgebra.py --windowed -F
 import tkinter
+import os
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -72,7 +73,6 @@ def _display_result(Matrix):
         Matrixrows.append(Matrixcolumns)
     window.after(10, lambda: window.focus_force())
     window.bind('<Return>', lambda event:window.destroy())
-    window.iconbitmap("icon.ico")
     window.mainloop()
 
 def _calculate_matrix(Input):
@@ -115,7 +115,6 @@ def _make_window(MatrixSize):
         Matrixrows.append(Matrixcolumns)
     window.after(10, lambda: window.focus_force())
     window.bind('<Return>', lambda event: _calculate_matrix(Matrixrows))
-    window.iconbitmap("icon.ico")
     window.mainloop()
 
 top = tkinter.Tk()
@@ -127,5 +126,4 @@ MatrixDimentions = tkinter.Spinbox(top, from_=4, to=50, width=3)
 MatrixDimentions.grid(row=0,column=1)
 gobutton = tkinter.Button(top, text="Enter Matrix", command=lambda: _make_window(int(MatrixDimentions.get()))).grid(row=0,column=2)
 top.bind('<Return>',lambda event:_make_window(int(MatrixDimentions.get())))
-top.iconbitmap("icon.ico")
 top.mainloop()
