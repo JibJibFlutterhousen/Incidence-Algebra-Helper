@@ -1,15 +1,43 @@
-# pyinstaller IncidenceAlgebra.py --windowed -F
-import tkinter
-import os
-import networkx as nx
-import matplotlib.pyplot as plt
+# pyinstaller IncidenceAlgebra.py --windowed --icon=icon.ico --onefile
+from tkinter import (Button, Tk, LabelFrame, Entry, Spinbox, Label)
+from math import ceil
+from networkx import (has_path, all_simple_paths, parse_adjlist, DiGraph, generate_edgelist, draw, relabel_nodes)
+from matplotlib.pyplot import (subplots)
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
 
-def _draw_graph(Graph):
-    Dimension = 1
-    FigDimension = 5
-    fig,axes = plt.subplots(nrows=Dimension,ncols=Dimension,figsize=(FigDimension,FigDimension),dpi=200)
-    nx.draw_circular(Graph, ax=axes, with_labels=True, edge_color='black', node_color='black', font_color='white')
-    axes.set_title("Graph 0")
+def _diagram_layout(Graph):
+    BaseElements = []
+    Distances = []
+    for x in range(len(Graph)):
+        temp = []
+        for y in range(len(Graph)):
+            temp.append(0)
+        Distances.append(temp)
+    for source in Graph:
+        if Graph.in_degree(source) == 0:
+            BaseElements.append(source)
+        for target in Graph:
+            if has_path(Graph, source, target) and source != target:
+                distance = len(max(all_simple_paths(Graph, source, target), key=lambda x: len(x)))-1
+                Distances[source-1][target-1] = distance
+            else:
+                Distances[source-1][target-1] = 0
+    MaxX = 0
+    MaxPlacedOnLevel = 0
+    XOffset = 1
+    Positions = dict()
+    for Base in BaseElements:
+        Positions[Base] = (MaxX,0)
+        for distance in list(set(Distances[Base-1])):
+            if distance <= 0:
+                continue
+            indices = [i for i in range(len(Distances[Base-1])) if Distances[Base-1][i] == distance]
+            MaxPlacedOnLevel = max(len(indices), MaxPlacedOnLevel)
+            for index in indices:
+                if Positions.get(index+1) == None:
+                    Positions[index+1] = (MaxX+(indices.index(index)*XOffset),distance)
+        MaxX += (MaxPlacedOnLevel)*XOffset
+    return Positions
 
 def _digraph_from_list_list(ListList):
     AdjacencyList = ""
@@ -24,56 +52,84 @@ def _digraph_from_list_list(ListList):
             ColumnCounter += 1
         AdjacencyList += "\n"
         RowCounter += 1
-    return nx.parse_adjlist(AdjacencyList.splitlines(), nodetype=int, create_using=nx.DiGraph())
+    return parse_adjlist(AdjacencyList.splitlines(), nodetype=int, create_using=DiGraph())
 
 def _reverse_transitivity_reduce(Graph):
-    DiGraph = nx.DiGraph(Graph).copy()
-    for TargetNode in DiGraph.nodes():
-        for SourceNode in DiGraph.nodes():
+    digraph = DiGraph(Graph).copy()
+    for TargetNode in digraph.nodes():
+        for SourceNode in digraph.nodes():
             if SourceNode == TargetNode:
                 continue
-            if not DiGraph.has_edge(SourceNode, TargetNode):
-                if nx.has_path(DiGraph, SourceNode, TargetNode):
-                    DiGraph.add_edge(SourceNode, TargetNode)
-    return DiGraph
+            if not digraph.has_edge(SourceNode, TargetNode):
+                if has_path(digraph, SourceNode, TargetNode):
+                    digraph.add_edge(SourceNode, TargetNode)
+    return digraph
 
-def _listlist_from_digraph(DiGraph):
+def _transitivity_reduce(Graph):
+    digraph = DiGraph(Graph).copy()
+    ValidEdges = []
+    for Edge in digraph.edges():
+        if (len(max(all_simple_paths(digraph, Edge[0], Edge[1]), key=lambda x: len(x)))-1) == 1:
+            ValidEdges.append(Edge)
+    return digraph.edge_subgraph(ValidEdges)
+
+def _listlist_from_digraph(digraph):
     listlist = []
-    for Columns in range(DiGraph.number_of_nodes()):
+    for Columns in range(digraph.number_of_nodes()):
         Column = []
-        for Rows in range(DiGraph.number_of_nodes()):
+        for Rows in range(digraph.number_of_nodes()):
             if Rows==Columns:
                 Column.append(1)
             else:
                 Column.append(0)
         listlist.append(Column)
-    for Edge in nx.generate_edgelist(DiGraph, data=False):
+    for Edge in generate_edgelist(digraph, data=False):
         listlist[int(Edge.split(" ")[0])-1][int(Edge.split(" ")[1])-1] = 1
     return listlist
 
-def _relabel(DiGraph):
+def _relabel(digraph):
     Mapping = dict()
-    for Node in DiGraph.nodes():
+    for Node in digraph.nodes():
         Mapping[Node] = Node+1
-    return nx.relabel_nodes(DiGraph, Mapping, True)
+    return relabel_nodes(digraph, Mapping, True)
 
-def _display_result(Matrix):
-    window = tkinter.Tk()
-    window.title("Resulting Incidence Algebra")
-    GoButton = tkinter.Button(window, text="Close", command=lambda: window.destroy()).grid(row=0,column=len(Matrix)+1)
+def _display_both_results(Matrix, Graph):
+    window = Tk()
+    window.title("Resulting Incidence Alegra")
+    
+    Results = LabelFrame(window)
+    Results.grid(row=0,column=0)
+    
+    MatrixResults = LabelFrame(Results, text="Incidence Matrix")
+    MatrixResults.grid(row=0,column=0)
     Matrixrows = []
     for y in range(len(Matrix)):
         Matrixcolumns = []
         for x in range(len(Matrix)):
-            Entry = tkinter.Entry(window, width=3)
-            Entry.insert(0,Matrix[y][x])
-            Entry.config(state="disabled")
-            Entry.grid(row=y,column=x)
-            Matrixcolumns.append(Entry)
+            entry = Entry(MatrixResults, width=3)
+            entry.insert(0,Matrix[y][x])
+            entry.config(state="disabled")
+            entry.grid(row=y,column=x)
+            Matrixcolumns.append(entry)
         Matrixrows.append(Matrixcolumns)
-    window.after(10, lambda: window.focus_force())
-    window.bind('<Return>', lambda event:window.destroy())
+
+    HasseResults = LabelFrame(Results, text="Hasse Diagram")
+    HasseResults.grid(row=0,column=1)
+    fig,axes = subplots(nrows=1,ncols=1,figsize=(ceil(len(Matrix)/3),ceil(len(Matrix)/5)))
+    Graph=_transitivity_reduce(Graph).copy()
+    draw(Graph, pos=_diagram_layout(Graph), ax=axes, with_labels=True, edge_color='black', node_color='black', font_color='white')
+    canvas = FigureCanvasTkAgg(fig, master=HasseResults)
+    canvas.draw()
+    canvas.get_tk_widget().pack()
+
+    Bottom = LabelFrame(window)
+    Bottom.grid(row=1,column=0)
+
+    ExitButton = Button(Bottom, text="Close", command=lambda: window.destroy())
+    ExitButton.pack()
+
     window.mainloop()
+    return
 
 def _calculate_matrix(Input):
     Matrix=[]
@@ -86,44 +142,45 @@ def _calculate_matrix(Input):
             Temp.append(int(value))
         Matrix.append(Temp)
     print(Matrix)
-    DiGraph = _relabel(_digraph_from_list_list(Matrix))
-    DiGraph = _reverse_transitivity_reduce(DiGraph)
-    OutputStream = (_listlist_from_digraph(DiGraph))
+    digraph = _relabel(_digraph_from_list_list(Matrix))
+    digraph = _reverse_transitivity_reduce(digraph)
+    OutputStream = (_listlist_from_digraph(digraph))
     print(OutputStream)
-    _display_result(OutputStream)
+    _display_both_results(OutputStream, digraph)
+    return
 
-def _make_window(MatrixSize):
-    window = tkinter.Tk()
+def _matrix_window(MatrixSize):
+    window = Tk()
     window.title("Matrix Entry")
-    GoButton = tkinter.Button(window, text="Populate", command=lambda: _calculate_matrix(Matrixrows)).grid(row=0,column=MatrixSize+1)
+    GoButton = Button(window, text="Populate", command=lambda: _calculate_matrix(Matrixrows)).grid(row=0,column=MatrixSize+1)
     Matrixrows = []
     for y in range(MatrixSize):
         Matrixcolumns = []
         for x in range(MatrixSize):
             if x == y:
-                Entry = tkinter.Entry(window, width=3)
-                Entry.insert(0, "1")
-                Entry.config(state="disabled")
+                entry = Entry(window, width=3)
+                entry.insert(0, "1")
+                entry.config(state="disabled")
             elif x < y:
-                Entry = tkinter.Entry(window, width=3)
-                Entry.insert(0, "0")
-                Entry.config(state="disabled")
+                entry = Entry(window, width=3)
+                entry.insert(0, "0")
+                entry.config(state="disabled")
             else:
-                Entry = tkinter.Entry(window, width=3)
-            Entry.grid(row=y,column=x)
-            Matrixcolumns.append(Entry)
+                entry = Entry(window, width=3)
+            entry.grid(row=y,column=x)
+            Matrixcolumns.append(entry)
         Matrixrows.append(Matrixcolumns)
     window.after(10, lambda: window.focus_force())
     window.bind('<Return>', lambda event: _calculate_matrix(Matrixrows))
     window.mainloop()
+    return
 
-top = tkinter.Tk()
+top = Tk()
 top.title("Incidence Algebra Creation")
 top.geometry("400x250")
-# top.state("zoomed")
-tkinter.Label(top, text="Matrix size:").grid(row=0)
-MatrixDimentions = tkinter.Spinbox(top, from_=4, to=50, width=3)
+Label(top, text="Matrix size:").grid(row=0)
+MatrixDimentions = Spinbox(top, from_=4, to=50, width=3)
 MatrixDimentions.grid(row=0,column=1)
-gobutton = tkinter.Button(top, text="Enter Matrix", command=lambda: _make_window(int(MatrixDimentions.get()))).grid(row=0,column=2)
-top.bind('<Return>',lambda event:_make_window(int(MatrixDimentions.get())))
+gobutton = Button(top, text="Enter Matrix", command=lambda: _matrix_window(int(MatrixDimentions.get()))).grid(row=0,column=2)
+top.bind('<Return>',lambda event:_matrix_window(int(MatrixDimentions.get())))
 top.mainloop()
