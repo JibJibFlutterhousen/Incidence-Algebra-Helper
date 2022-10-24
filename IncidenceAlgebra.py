@@ -5,12 +5,12 @@ from networkx import (has_path, all_simple_paths, parse_adjlist, DiGraph, genera
 from matplotlib.pyplot import (subplots)
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
 
-def _diagram_layout(Graph):
+def _diagram_layout(Graph, Height):
     BaseElements = []
     Distances = []
-    for x in range(len(Graph)):
+    for x in range(Height):
         temp = []
-        for y in range(len(Graph)):
+        for y in range(Height):
             temp.append(0)
         Distances.append(temp)
     for source in Graph:
@@ -19,20 +19,22 @@ def _diagram_layout(Graph):
         for target in Graph:
             if has_path(Graph, source, target) and source != target:
                 distance = len(max(all_simple_paths(Graph, source, target), key=lambda x: len(x)))-1
+                # print(f"The distance between {source-1} and {target-1} is {distance}. Distances has length {len(Distances)} and width {len(Distances[0])}")
                 Distances[source-1][target-1] = distance
             else:
                 Distances[source-1][target-1] = 0
     MaxX = 0
     MaxPlacedOnLevel = 0
-    XOffset = 1
     Positions = dict()
     for Base in BaseElements:
+        MaxPlacedOnLevel = 0
         Positions[Base] = (MaxX,0)
         for distance in list(set(Distances[Base-1])):
             if distance <= 0:
                 continue
             indices = [i for i in range(len(Distances[Base-1])) if Distances[Base-1][i] == distance]
             MaxPlacedOnLevel = max(len(indices), MaxPlacedOnLevel)
+            XOffset = max(10, MaxPlacedOnLevel)
             for index in indices:
                 if Positions.get(index+1) == None:
                     Positions[index+1] = (MaxX+(indices.index(index)*XOffset),distance)
@@ -108,16 +110,19 @@ def _display_both_results(Matrix, Graph):
         for x in range(len(Matrix)):
             entry = Entry(MatrixResults, width=3)
             entry.insert(0,Matrix[y][x])
-            entry.config(state="disabled")
+            if Matrix[y][x] == 0:
+                entry.config({"background" : "Grey"})
+            else:
+                entry.config({"background":"Yellow"})
             entry.grid(row=y,column=x)
             Matrixcolumns.append(entry)
         Matrixrows.append(Matrixcolumns)
 
     HasseResults = LabelFrame(Results, text="Hasse Diagram")
     HasseResults.grid(row=0,column=1)
-    fig,axes = subplots(nrows=1,ncols=1,figsize=(ceil(len(Matrix)/3),ceil(len(Matrix)/5)))
+    fig,axes = subplots(nrows=1,ncols=1,dpi=100)
     Graph=_transitivity_reduce(Graph).copy()
-    draw(Graph, pos=_diagram_layout(Graph), ax=axes, with_labels=True, edge_color='black', node_color='black', font_color='white')
+    draw(Graph, pos=_diagram_layout(Graph, len(Matrixrows)), ax=axes, with_labels=True, edge_color='black', node_color='black', font_color='white')
     canvas = FigureCanvasTkAgg(fig, master=HasseResults)
     canvas.draw()
     canvas.get_tk_widget().pack()
@@ -128,6 +133,7 @@ def _display_both_results(Matrix, Graph):
     ExitButton = Button(Bottom, text="Close", command=lambda: window.destroy())
     ExitButton.pack()
 
+    window.state('zoomed')
     window.mainloop()
     return
 
@@ -141,11 +147,11 @@ def _calculate_matrix(Input):
                 value = 0
             Temp.append(int(value))
         Matrix.append(Temp)
-    print(Matrix)
+    # print(Matrix)
     digraph = _relabel(_digraph_from_list_list(Matrix))
     digraph = _reverse_transitivity_reduce(digraph)
     OutputStream = (_listlist_from_digraph(digraph))
-    print(OutputStream)
+    # print(OutputStream)
     _display_both_results(OutputStream, digraph)
     return
 
@@ -177,7 +183,6 @@ def _matrix_window(MatrixSize):
 
 top = Tk()
 top.title("Incidence Algebra Creation")
-top.geometry("400x250")
 Label(top, text="Matrix size:").grid(row=0)
 MatrixDimentions = Spinbox(top, from_=4, to=50, width=3)
 MatrixDimentions.grid(row=0,column=1)
